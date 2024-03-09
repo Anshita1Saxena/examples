@@ -31,7 +31,7 @@ def ddp_setup(rank, world_size):
         world_size: Total number of processes 
     """
     # Running rank-0 process
-    os.environ["MASTER_ADDR"] = "localhost"
+    os.environ["MASTER_ADDR"] = "hopserver"
     os.environ["MASTER_PORT"] = "12355"
     init_process_group(backend="gloo", rank=rank, world_size=world_size)
     # torch.cuda.set_device(rank)
@@ -138,6 +138,7 @@ if __name__ == "__main__":
     
     # world_size = torch.cuda.device_count()
     world_size = os.cpu_count()
+    print(world_size)
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     # Takes a function and spawns that across all of processes in the distributed group
     mp.spawn(main, args=(world_size, args.save_every, args.total_epochs, args.batch_size), nprocs=world_size)
