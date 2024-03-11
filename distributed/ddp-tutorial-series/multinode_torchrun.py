@@ -1,4 +1,4 @@
-# Torchrun multi-cpu
+# mulitnode multicpu
 import torch
 import torch.nn.functional as F
 from torch.utils.data import Dataset, DataLoader
@@ -22,10 +22,9 @@ class Trainer:
         optimizer: torch.optim.Optimizer,
         save_every: int,
         snapshot_path: str,
-        device
     ) -> None:
-        self.gpu_id = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.rank = int(os.environ["LOCAL_RANK"])
+        self.local_rank = int(os.environ["LOCAL_RANK"])
+        self.global_rank = int(os.environ["RANK"])
         self.model = model
         self.train_data = train_data
         self.optimizer = optimizer
@@ -33,15 +32,17 @@ class Trainer:
         self.epochs_run = 0
         self.snapshot_path = snapshot_path
         if os.path.exists(snapshot_path):
-            print(f"[CPU: {self.rank}] Loading snapshot")
+            print(f"[CPU: {self.global_rank}] Loading snapshot")
             self._load_snapshot(snapshot_path)
-        self.model = DDP(model)
+
+        self.model = DDP(self.model)
 
     def _load_snapshot(self, snapshot_path):
+        #loc = f"cuda:{self.local_rank}"
         snapshot = torch.load(snapshot_path)
         self.model.load_state_dict(snapshot["MODEL_STATE"])
         self.epochs_run = snapshot["EPOCHS_RUN"]
-        print(f"[CPU: {self.rank}] Resuming training from snapshot at Epoch {self.epochs_run}")
+        print(f"[CPU: {self.global_rank}] Resuming training from snapshot at Epoch {self.epochs_run}")
 
     def _run_batch(self, source, targets):
         self.optimizer.zero_grad()
@@ -52,11 +53,11 @@ class Trainer:
 
     def _run_epoch(self, epoch):
         b_sz = len(next(iter(self.train_data))[0])
-        print(f"[CPU: {self.rank}] Epoch {epoch} | Batchsize: {b_sz} | Steps: {len(self.train_data)}\n")
+        print(f"[CPU: {self.global_rank}] Epoch {epoch} | Batchsize: {b_sz} | Steps: {len(self.train_data)}\n")
         self.train_data.sampler.set_epoch(epoch)
         for source, targets in self.train_data:
-            # source = source.to(self.gpu_id)
-            # targets = targets.to(self.gpu_id)
+            #source = source.to(self.local_rank)
+            #targets = targets.to(self.local_rank)
             self._run_batch(source, targets)
 
     def _save_snapshot(self, epoch):
@@ -70,7 +71,7 @@ class Trainer:
     def train(self, max_epochs: int):
         for epoch in range(self.epochs_run, max_epochs):
             self._run_epoch(epoch)
-            if self.rank == 0 and epoch % self.save_every == 0:
+            if self.local_rank == 0 and epoch % self.save_every == 0:
                 self._save_snapshot(epoch)
 
 
@@ -95,8 +96,7 @@ def main(save_every: int, total_epochs: int, batch_size: int, snapshot_path: str
     ddp_setup()
     dataset, model, optimizer = load_train_objs()
     train_data = prepare_dataloader(dataset, batch_size)
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    trainer = Trainer(model, train_data, optimizer, save_every, snapshot_path, device)
+    trainer = Trainer(model, train_data, optimizer, save_every, snapshot_path)
     trainer.train(total_epochs)
     destroy_process_group()
 
@@ -108,4 +108,5 @@ if __name__ == "__main__":
     parser.add_argument('save_every', type=int, help='How often to save a snapshot')
     parser.add_argument('--batch_size', default=32, type=int, help='Input batch size on each device (default: 32)')
     args = parser.parse_args()
+
     main(args.save_every, args.total_epochs, args.batch_size)

@@ -1,3 +1,4 @@
+# Single-CPU
 import torch
 import torch.nn.functional as F
 from torch.utils.data import Dataset, DataLoader
@@ -13,7 +14,7 @@ class Trainer:
         train_data: DataLoader,
         optimizer: torch.optim.Optimizer,
         gpu_id,
-        save_every: int, 
+        save_every: int,
     ) -> None:
         self.gpu_id = gpu_id
         print(gpu_id)
@@ -38,7 +39,7 @@ class Trainer:
             self._run_batch(source, targets)
 
     def _save_checkpoint(self, epoch):
-        ckp = self.model.state_dict()
+	        ckp = self.model.state_dict()
         PATH = "checkpoint.pt"
         torch.save(ckp, PATH)
         print(f"Epoch {epoch} | Training checkpoint saved at {PATH}")
@@ -83,7 +84,7 @@ if __name__ == "__main__":
     parser.add_argument('save_every', type=int, help='How often to save a snapshot')
     parser.add_argument('--batch_size', default=32, type=int, help='Input batch size on each device (default: 32)')
     args = parser.parse_args()
-    
+
     # device = -1  # shorthand for cuda:0
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     main(device, args.total_epochs, args.save_every, args.batch_size)
